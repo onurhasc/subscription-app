@@ -9,7 +9,7 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # sonra değiştiririz
+app.secret_key = "supersecretkey"
 
 DB = "database.db"
 
@@ -49,8 +49,13 @@ def get_db():
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        email = request.form["email"]
-        password = generate_password_hash(request.form["password"])
+        email = request.form.get("email")
+        password_raw = request.form.get("password")
+
+        if not email or not password_raw:
+            return "Email ve şifre boş olamaz"
+
+        password = generate_password_hash(password_raw)
 
         try:
             con = get_db()
@@ -67,8 +72,8 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        email = request.form["email"]
-        password = request.form["password"]
+        email = request.form.get("email")
+        password = request.form.get("password")
 
         con = get_db()
         cur = con.cursor()
@@ -128,9 +133,18 @@ def add():
     if "user_id" not in session:
         return redirect("/login")
 
-    name = request.form["name"]
-    price = int(request.form["price"])
-    next_date = request.form["next"]
+    name = request.form.get("name", "").strip()
+    price_raw = request.form.get("price", "").strip()
+    next_date = request.form.get("next", "").strip()
+
+    # Validation (crash önleme)
+    if not name or not price_raw or not next_date:
+        return redirect("/")
+
+    try:
+        price = int(price_raw)
+    except:
+        return redirect("/")
 
     con = get_db()
     cur = con.cursor()
@@ -145,6 +159,7 @@ def add():
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
