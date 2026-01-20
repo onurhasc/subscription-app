@@ -72,6 +72,7 @@
                     <th class="px-6 py-3">Abonelik</th>
                     <th class="px-6 py-3">Ücret</th>
                     <th class="px-6 py-3">Son Ödeme</th>
+                    <th class="px-6 py-3 text-right">İşlem</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -80,6 +81,12 @@
                     <td class="px-6 py-3 font-medium">{{ s.name }}</td>
                     <td class="px-6 py-3">₺{{ s.price }}</td>
                     <td class="px-6 py-3">{{ s.next }}</td>
+                    <td class="px-6 py-3 text-right">
+                        <a href="/delete/{{ s.id }}"
+                           class="text-red-600 hover:underline">
+                            Sil
+                        </a>
+                    </td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -145,6 +152,7 @@ if (labels.length > 0) {
 
 </body>
 </html>
+
 
 
 

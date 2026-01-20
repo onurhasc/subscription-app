@@ -104,10 +104,16 @@ def dashboard():
 
     con = get_db()
     cur = con.cursor()
-    cur.execute("SELECT name, price, next FROM subscriptions WHERE user_id=?", (user_id,))
+    cur.execute(
+        "SELECT id, name, price, next FROM subscriptions WHERE user_id=?",
+        (user_id,)
+    )
     rows = cur.fetchall()
 
-    subscriptions = [{"name": r[0], "price": r[1], "next": r[2]} for r in rows]
+    subscriptions = [
+        {"id": r[0], "name": r[1], "price": r[2], "next": r[3]}
+        for r in rows
+    ]
 
     total = sum(s["price"] for s in subscriptions)
     count = len(subscriptions)
@@ -137,7 +143,6 @@ def add():
     price_raw = request.form.get("price", "").strip()
     next_date = request.form.get("next", "").strip()
 
-    # Validation (crash önleme)
     if not name or not price_raw or not next_date:
         return redirect("/")
 
@@ -157,8 +162,27 @@ def add():
     return redirect("/")
 
 
+@app.route("/delete/<int:sub_id>")
+def delete(sub_id):
+    if "user_id" not in session:
+        return redirect("/login")
+
+    con = get_db()
+    cur = con.cursor()
+
+    # Sadece kendi aboneliğini silebilir
+    cur.execute(
+        "DELETE FROM subscriptions WHERE id=? AND user_id=?",
+        (sub_id, session["user_id"])
+    )
+    con.commit()
+
+    return redirect("/")
+
+
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
