@@ -1,141 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>{{ title }}</title>
 
-    <!-- Tailwind -->
+    <!-- Tailwind CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+<body class="bg-gray-50 font-sans">
 
-<body class="bg-gray-50">
+<div class="flex h-screen">
 
-<div class="max-w-6xl mx-auto px-6 py-8">
+    <!-- Sidebar -->
+    <aside class="w-60 bg-gray-900 text-white p-6 flex flex-col">
+        <h2 class="text-2xl font-bold mb-6">SubTrack</h2>
+        <nav class="space-y-3">
+            <a href="/" class="block py-2 px-3 rounded hover:bg-gray-700">Dashboard</a>
+            <a href="#!" class="block py-2 px-3 rounded hover:bg-gray-700">Abonelikler</a>
+            <a href="#!" class="block py-2 px-3 rounded hover:bg-gray-700">Ayarlar</a>
+            <a href="/logout" class="block py-2 px-3 rounded hover:bg-gray-700">Çıkış Yap</a>
+        </nav>
+    </aside>
 
-    <!-- Header -->
-    <div class="flex justify-between items-center mb-8">
-        <h1 class="text-3xl font-bold">Dashboard</h1>
+    <!-- Main -->
+    <div class="flex-1 overflow-auto p-8">
 
-        <button onclick="document.getElementById('modal').classList.remove('hidden')"
-                class="bg-black text-white px-5 py-2 rounded-lg">
-            + Add Subscription
-        </button>
-    </div>
-
-    <!-- Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-white p-6 rounded-xl shadow">
-            <p class="text-gray-500 text-sm">Monthly Spend</p>
-            <h2 class="text-3xl font-bold">₺{{ total }}</h2>
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
+            <button onclick="document.getElementById('modal').classList.remove('hidden')"
+                    class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">
+                + Abonelik Ekle
+            </button>
         </div>
 
-        <div class="bg-white p-6 rounded-xl shadow">
-            <p class="text-gray-500 text-sm">Active Subscriptions</p>
-            <h2 class="text-3xl font-bold">{{ count }}</h2>
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-xl shadow">
+                <p class="text-sm text-gray-500">Toplam Harcama</p>
+                <h2 class="text-2xl font-semibold mt-2">₺{{ total }}</h2>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow">
+                <p class="text-sm text-gray-500">Aktif Abonelik</p>
+                <h2 class="text-2xl font-semibold mt-2">{{ count }}</h2>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow">
+                <p class="text-sm text-gray-500">En Pahalı</p>
+                <h2 class="text-2xl font-semibold mt-2">{{ most_expensive }}</h2>
+            </div>
         </div>
 
-        <div class="bg-white p-6 rounded-xl shadow">
-            <p class="text-gray-500 text-sm">Most Expensive</p>
-            <h2 class="text-3xl font-bold">{{ most_expensive }}</h2>
-        </div>
-    </div>
-
-    <!-- Chart -->
-    <div class="bg-white p-6 rounded-xl shadow mb-8">
-        <h2 class="text-lg font-bold mb-4">Spending Distribution</h2>
-        <div class="max-w-md mx-auto">
-            <canvas id="myChart"></canvas>
-        </div>
-    </div>
-
-    <!-- Table -->
-    <div class="bg-white rounded-xl shadow overflow-hidden">
-        <table class="w-full">
-            <thead class="bg-gray-100 text-left text-sm">
+        <!-- Table -->
+        <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
+            <table class="w-full text-sm text-left">
+                <thead class="bg-gray-100 text-gray-600">
                 <tr>
-                    <th class="px-6 py-3">Service</th>
-                    <th class="px-6 py-3">Price</th>
-                    <th class="px-6 py-3">Next Payment</th>
+                    <th class="px-6 py-3">Abonelik</th>
+                    <th class="px-6 py-3">Ücret</th>
+                    <th class="px-6 py-3">Son Ödeme</th>
                     <th class="px-6 py-3"></th>
                 </tr>
-            </thead>
-            <tbody>
+                </thead>
+                <tbody>
                 {% for s in subscriptions %}
-                <tr class="border-t">
-                    <td class="px-6 py-3">{{ s.name }}</td>
+                <tr class="border-t hover:bg-gray-50">
+                    <td class="px-6 py-3 font-medium">{{ s.name }}</td>
                     <td class="px-6 py-3">₺{{ s.price }}</td>
                     <td class="px-6 py-3">{{ s.next }}</td>
                     <td class="px-6 py-3 text-right">
-                        <a href="/delete/{{ loop.index0 }}" class="text-red-500">Delete</a>
+                        <a href="/delete/{{ loop.index0 }}"
+                           class="text-red-500 hover:underline">
+                            Sil
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
+
     </div>
 </div>
 
-<!-- Modal -->
-<div id="modal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden">
-    <form method="POST" action="/add" class="bg-white p-6 rounded-xl w-96 space-y-4">
-        <h2 class="text-xl font-bold">Add Subscription</h2>
+<!-- Add Modal -->
+<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+    <form method="POST" action="/add"
+          class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
 
-        <input name="name" placeholder="Netflix" required class="w-full border p-2 rounded">
-        <input name="price" type="number" placeholder="99" required class="w-full border p-2 rounded">
-        <input name="next" type="date" required class="w-full border p-2 rounded">
+        <h2 class="text-xl font-bold">Yeni Abonelik Ekle</h2>
 
-        <div class="flex justify-end gap-2">
+        <input name="name" type="text" placeholder="Örn: Netflix"
+               class="w-full border p-2 rounded-lg focus:outline-blue-500">
+
+        <input name="price" type="number" placeholder="Ücret"
+               class="w-full border p-2 rounded-lg focus:outline-blue-500">
+
+        <input name="next" type="date"
+               class="w-full border p-2 rounded-lg focus:outline-blue-500">
+
+        <div class="flex justify-between">
             <button type="button"
-                    onclick="document.getElementById('modal').classList.add('hidden')">
-                Cancel
+                    onclick="document.getElementById('modal').classList.add('hidden')"
+                    class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-100">
+                İptal
             </button>
-            <button class="bg-black text-white px-4 py-2 rounded">
-                Save
+            <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                Kaydet
             </button>
         </div>
     </form>
 </div>
 
-<!-- Chart Script -->
-<script>
-const labels = {{ labels | tojson }};
-const values = {{ values | tojson }};
-
-if (labels.length > 0) {
-    new Chart(document.getElementById('myChart'), {
-        type: 'doughnut',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: values,
-                backgroundColor: [
-                    "#111827",
-                    "#2563eb",
-                    "#059669",
-                    "#7c3aed",
-                    "#dc2626",
-                    "#ea580c",
-                    "#0d9488",
-                    "#64748b"
-                ],
-                borderWidth: 0
-            }]
-        },
-        options: {
-            plugins: {
-                legend: {
-                    position: 'bottom'
-                }
-            }
-        }
-    });
-}
-</script>
-
 </body>
 </html>
+
 
 
