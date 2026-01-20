@@ -32,7 +32,7 @@
         <!-- Header -->
         <div class="flex justify-between items-center mb-8">
             <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
-            <button onclick="document.getElementById('modal').classList.remove('hidden')"
+            <button onclick="openAddModal()"
                     class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">
                 + Abonelik Ekle
             </button>
@@ -81,7 +81,12 @@
                     <td class="px-6 py-3 font-medium">{{ s.name }}</td>
                     <td class="px-6 py-3">₺{{ s.price }}</td>
                     <td class="px-6 py-3">{{ s.next }}</td>
-                    <td class="px-6 py-3 text-right">
+                    <td class="px-6 py-3 text-right space-x-4">
+                        <button
+                            onclick="openEditModal('{{ s.id }}','{{ s.name }}','{{ s.price }}','{{ s.next }}')"
+                            class="text-blue-600 hover:underline">
+                            Düzenle
+                        </button>
                         <a href="/delete/{{ s.id }}"
                            class="text-red-600 hover:underline">
                             Sil
@@ -96,39 +101,75 @@
     </div>
 </div>
 
-<!-- Modal -->
-<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+<!-- ADD MODAL -->
+<div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
     <form method="POST" action="/add"
           class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
 
         <h2 class="text-xl font-bold">Yeni Abonelik Ekle</h2>
 
-        <input name="name" type="text" placeholder="Örn: Netflix"
-               required
-               class="w-full border p-2 rounded-lg focus:outline-blue-500">
-
-        <input name="price" type="number" placeholder="Ücret"
-               required
-               class="w-full border p-2 rounded-lg focus:outline-blue-500">
-
-        <input name="next" type="date"
-               required
-               class="w-full border p-2 rounded-lg focus:outline-blue-500">
+        <input name="name" placeholder="Örn: Netflix" required class="w-full border p-2 rounded-lg">
+        <input name="price" type="number" placeholder="Ücret" required class="w-full border p-2 rounded-lg">
+        <input name="next" type="date" required class="w-full border p-2 rounded-lg">
 
         <div class="flex justify-between">
-            <button type="button"
-                    onclick="document.getElementById('modal').classList.add('hidden')"
-                    class="px-4 py-2 rounded-lg border text-gray-700 hover:bg-gray-100">
+            <button type="button" onclick="closeModals()" class="px-4 py-2 border rounded">
                 İptal
             </button>
-            <button class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+            <button class="bg-blue-600 text-white px-4 py-2 rounded">
                 Kaydet
             </button>
         </div>
     </form>
 </div>
 
-<!-- Chart Script -->
+<!-- EDIT MODAL -->
+<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
+    <form method="POST" id="editForm"
+          class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
+
+        <h2 class="text-xl font-bold">Aboneliği Düzenle</h2>
+
+        <input name="name" id="editName" required class="w-full border p-2 rounded-lg">
+        <input name="price" id="editPrice" type="number" required class="w-full border p-2 rounded-lg">
+        <input name="next" id="editNext" type="date" required class="w-full border p-2 rounded-lg">
+
+        <div class="flex justify-between">
+            <button type="button" onclick="closeModals()" class="px-4 py-2 border rounded">
+                İptal
+            </button>
+            <button class="bg-blue-600 text-white px-4 py-2 rounded">
+                Güncelle
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- JS -->
+<script>
+function openAddModal() {
+    closeModals();
+    document.getElementById("addModal").classList.remove("hidden");
+}
+
+function openEditModal(id, name, price, next) {
+    closeModals();
+    document.getElementById("editModal").classList.remove("hidden");
+
+    document.getElementById("editName").value = name;
+    document.getElementById("editPrice").value = price;
+    document.getElementById("editNext").value = next;
+
+    document.getElementById("editForm").action = "/edit/" + id;
+}
+
+function closeModals() {
+    document.getElementById("addModal").classList.add("hidden");
+    document.getElementById("editModal").classList.add("hidden");
+}
+</script>
+
+<!-- Chart -->
 <script>
 const labels = {{ labels | tojson }};
 const values = {{ values | tojson }};
@@ -152,6 +193,7 @@ if (labels.length > 0) {
 
 </body>
 </html>
+
 
 
 
