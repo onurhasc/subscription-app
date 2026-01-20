@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ title }}</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body class="bg-gray-50">
+
+<div class="max-w-6xl mx-auto px-6 py-8">
+
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8">
+        <h1 class="text-3xl font-bold">Dashboard</h1>
+
+        <button onclick="document.getElementById('modal').classList.remove('hidden')"
+                class="bg-black text-white px-5 py-2 rounded-lg">
+            + Add Subscription
+        </button>
+    </div>
+
+    <!-- Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-white p-6 rounded-xl shadow">
+            <p class="text-gray-500 text-sm">Monthly Spend</p>
+            <h2 class="text-3xl font-bold">₺{{ total }}</h2>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <p class="text-gray-500 text-sm">Active Subscriptions</p>
+            <h2 class="text-3xl font-bold">{{ count }}</h2>
+        </div>
+
+        <div class="bg-white p-6 rounded-xl shadow">
+            <p class="text-gray-500 text-sm">Most Expensive</p>
+            <h2 class="text-3xl font-bold">{{ most_expensive }}</h2>
+        </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="bg-white p-6 rounded-xl shadow mb-8">
+        <h2 class="text-lg font-bold mb-4">Spending Distribution</h2>
+        <div class="max-w-md mx-auto">
+            <canvas id="myChart"></canvas>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white rounded-xl shadow overflow-hidden">
+        <table class="w-full">
+            <thead class="bg-gray-100 text-left text-sm">
+                <tr>
+                    <th class="px-6 py-3">Service</th>
+                    <th class="px-6 py-3">Price</th>
+                    <th class="px-6 py-3">Next Payment</th>
+                    <th class="px-6 py-3"></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for s in subscriptions %}
+                <tr class="border-t">
+                    <td class="px-6 py-3">{{ s.name }}</td>
+                    <td class="px-6 py-3">₺{{ s.price }}</td>
+                    <td class="px-6 py-3">{{ s.next }}</td>
+                    <td class="px-6 py-3 text-right">
+                        <a href="/delete/{{ loop.index0 }}" class="text-red-500">Delete</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 bg-black/50 flex items-center justify-center hidden">
+    <form method="POST" action="/add" class="bg-white p-6 rounded-xl w-96 space-y-4">
+        <h2 class="text-xl font-bold">Add Subscription</h2>
+
+        <input name="name" placeholder="Netflix" required class="w-full border p-2 rounded">
+        <input name="price" type="number" placeholder="99" required class="w-full border p-2 rounded">
+        <input name="next" type="date" required class="w-full border p-2 rounded">
+
+        <div class="flex justify-end gap-2">
+            <button type="button"
+                    onclick="document.getElementById('modal').classList.add('hidden')">
+                Cancel
+            </button>
+            <button class="bg-black text-white px-4 py-2 rounded">
+                Save
+            </button>
+        </div>
+    </form>
+</div>
+
+<!-- Chart Script -->
+<script>
+const labels = {{ labels | tojson }};
+const values = {{ values | tojson }};
+
+if (labels.length > 0) {
+    new Chart(document.getElementById('myChart'), {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: [
+                    "#111827",
+                    "#2563eb",
+                    "#059669",
+                    "#7c3aed",
+                    "#dc2626",
+                    "#ea580c",
+                    "#0d9488",
+                    "#64748b"
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+}
+</script>
+
+</body>
+</html>
+
+

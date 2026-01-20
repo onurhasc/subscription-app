@@ -1,0 +1,12 @@
+[
+  {
+    "name": "amazon",
+    "price": 50,
+    "next": "2026-01-23"
+  },
+  {
+    "name": "watsons",
+    "price": 180,
+    "next": "2026-01-23"
+  }
+]
