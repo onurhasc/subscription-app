@@ -4,19 +4,16 @@
     <meta charset="UTF-8">
     <title>{{ title }}</title>
 
-    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body class="bg-gray-50 font-sans">
 
-<div class="flex h-screen">
+<div class="flex min-h-screen">
 
     <!-- Sidebar -->
-    <aside class="w-60 bg-gray-900 text-white p-6 flex flex-col">
+    <aside id="sidebar" class="fixed md:static z-50 w-64 h-full bg-gray-900 text-white p-6 transform -translate-x-full md:translate-x-0 transition">
         <h2 class="text-2xl font-bold mb-6">SubTrack</h2>
         <nav class="space-y-3">
             <a href="/" class="block py-2 px-3 rounded hover:bg-gray-700">Dashboard</a>
@@ -27,70 +24,67 @@
     </aside>
 
     <!-- Main -->
-    <div class="flex-1 overflow-auto p-8">
+    <div class="flex-1 p-4 md:p-8 w-full">
 
         <!-- Header -->
-        <div class="flex justify-between items-center mb-8">
-            <h1 class="text-3xl font-bold text-gray-800">Dashboard</h1>
+        <div class="flex justify-between items-center mb-6">
+            <div class="flex items-center gap-3">
+                <button onclick="toggleSidebar()" class="md:hidden bg-gray-200 px-3 py-2 rounded">☰</button>
+                <h1 class="text-2xl md:text-3xl font-bold">Dashboard</h1>
+            </div>
+
             <button onclick="openAddModal()"
-                    class="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700">
-                + Abonelik Ekle
+                    class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                + Ekle
             </button>
         </div>
 
         <!-- Stats -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-white p-6 rounded-xl shadow">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="bg-white p-4 rounded-xl shadow">
                 <p class="text-sm text-gray-500">Toplam Harcama</p>
-                <h2 class="text-2xl font-semibold mt-2">₺{{ total }}</h2>
+                <h2 class="text-xl font-semibold mt-1">₺{{ total }}</h2>
             </div>
 
-            <div class="bg-white p-6 rounded-xl shadow">
+            <div class="bg-white p-4 rounded-xl shadow">
                 <p class="text-sm text-gray-500">Aktif Abonelik</p>
-                <h2 class="text-2xl font-semibold mt-2">{{ count }}</h2>
+                <h2 class="text-xl font-semibold mt-1">{{ count }}</h2>
             </div>
 
-            <div class="bg-white p-6 rounded-xl shadow">
+            <div class="bg-white p-4 rounded-xl shadow">
                 <p class="text-sm text-gray-500">En Pahalı</p>
-                <h2 class="text-2xl font-semibold mt-2">{{ most_expensive }}</h2>
+                <h2 class="text-xl font-semibold mt-1">{{ most_expensive }}</h2>
             </div>
         </div>
 
         <!-- Chart -->
-        <div class="bg-white p-6 rounded-xl shadow mb-8">
-            <h2 class="text-lg font-semibold mb-4">Harcama Dağılımı</h2>
-            <div class="max-w-md">
+        <div class="bg-white p-4 rounded-xl shadow mb-6">
+            <h2 class="text-md font-semibold mb-2">Harcama Dağılımı</h2>
+            <div class="max-w-xs md:max-w-md">
                 <canvas id="myChart"></canvas>
             </div>
         </div>
 
         <!-- Table -->
-        <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
-            <table class="w-full text-sm text-left">
+        <div class="bg-white rounded-xl shadow overflow-x-auto">
+            <table class="w-full text-sm">
                 <thead class="bg-gray-100 text-gray-600">
                 <tr>
-                    <th class="px-6 py-3">Abonelik</th>
-                    <th class="px-6 py-3">Ücret</th>
-                    <th class="px-6 py-3">Son Ödeme</th>
-                    <th class="px-6 py-3 text-right">İşlem</th>
+                    <th class="px-4 py-2 text-left">Abonelik</th>
+                    <th class="px-4 py-2">Ücret</th>
+                    <th class="px-4 py-2">Tarih</th>
+                    <th class="px-4 py-2 text-right">İşlem</th>
                 </tr>
                 </thead>
                 <tbody>
                 {% for s in subscriptions %}
                 <tr class="border-t hover:bg-gray-50">
-                    <td class="px-6 py-3 font-medium">{{ s.name }}</td>
-                    <td class="px-6 py-3">₺{{ s.price }}</td>
-                    <td class="px-6 py-3">{{ s.next }}</td>
-                    <td class="px-6 py-3 text-right space-x-4">
-                        <button
-                            onclick="openEditModal('{{ s.id }}','{{ s.name }}','{{ s.price }}','{{ s.next }}')"
-                            class="text-blue-600 hover:underline">
-                            Düzenle
-                        </button>
-                        <a href="/delete/{{ s.id }}"
-                           class="text-red-600 hover:underline">
-                            Sil
-                        </a>
+                    <td class="px-4 py-2 font-medium">{{ s.name }}</td>
+                    <td class="px-4 py-2">₺{{ s.price }}</td>
+                    <td class="px-4 py-2">{{ s.next }}</td>
+                    <td class="px-4 py-2 text-right space-x-3">
+                        <button onclick="openEditModal('{{ s.id }}','{{ s.name }}','{{ s.price }}','{{ s.next }}')" class="text-blue-600">Düzenle</button>
+                        <a href="/delete/{{ s.id }}" class="text-red-600">Sil</a>
                     </td>
                 </tr>
                 {% endfor %}
@@ -101,52 +95,39 @@
     </div>
 </div>
 
-<!-- ADD MODAL -->
+<!-- Add Modal -->
 <div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
-    <form method="POST" action="/add"
-          class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
-
-        <h2 class="text-xl font-bold">Yeni Abonelik Ekle</h2>
-
-        <input name="name" placeholder="Örn: Netflix" required class="w-full border p-2 rounded-lg">
-        <input name="price" type="number" placeholder="Ücret" required class="w-full border p-2 rounded-lg">
-        <input name="next" type="date" required class="w-full border p-2 rounded-lg">
-
+    <form method="POST" action="/add" class="bg-white p-6 rounded-xl w-11/12 max-w-sm space-y-3">
+        <h2 class="text-lg font-bold">Yeni Abonelik</h2>
+        <input name="name" placeholder="Netflix" required class="w-full border p-2 rounded">
+        <input name="price" type="number" placeholder="Ücret" required class="w-full border p-2 rounded">
+        <input name="next" type="date" required class="w-full border p-2 rounded">
         <div class="flex justify-between">
-            <button type="button" onclick="closeModals()" class="px-4 py-2 border rounded">
-                İptal
-            </button>
-            <button class="bg-blue-600 text-white px-4 py-2 rounded">
-                Kaydet
-            </button>
+            <button type="button" onclick="closeModals()" class="border px-3 py-1 rounded">İptal</button>
+            <button class="bg-blue-600 text-white px-3 py-1 rounded">Kaydet</button>
         </div>
     </form>
 </div>
 
-<!-- EDIT MODAL -->
+<!-- Edit Modal -->
 <div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
-    <form method="POST" id="editForm"
-          class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
-
-        <h2 class="text-xl font-bold">Aboneliği Düzenle</h2>
-
-        <input name="name" id="editName" required class="w-full border p-2 rounded-lg">
-        <input name="price" id="editPrice" type="number" required class="w-full border p-2 rounded-lg">
-        <input name="next" id="editNext" type="date" required class="w-full border p-2 rounded-lg">
-
+    <form method="POST" id="editForm" class="bg-white p-6 rounded-xl w-11/12 max-w-sm space-y-3">
+        <h2 class="text-lg font-bold">Düzenle</h2>
+        <input name="name" id="editName" required class="w-full border p-2 rounded">
+        <input name="price" id="editPrice" type="number" required class="w-full border p-2 rounded">
+        <input name="next" id="editNext" type="date" required class="w-full border p-2 rounded">
         <div class="flex justify-between">
-            <button type="button" onclick="closeModals()" class="px-4 py-2 border rounded">
-                İptal
-            </button>
-            <button class="bg-blue-600 text-white px-4 py-2 rounded">
-                Güncelle
-            </button>
+            <button type="button" onclick="closeModals()" class="border px-3 py-1 rounded">İptal</button>
+            <button class="bg-blue-600 text-white px-3 py-1 rounded">Güncelle</button>
         </div>
     </form>
 </div>
 
-<!-- JS -->
 <script>
+function toggleSidebar() {
+    document.getElementById("sidebar").classList.toggle("-translate-x-full");
+}
+
 function openAddModal() {
     closeModals();
     document.getElementById("addModal").classList.remove("hidden");
@@ -155,11 +136,9 @@ function openAddModal() {
 function openEditModal(id, name, price, next) {
     closeModals();
     document.getElementById("editModal").classList.remove("hidden");
-
     document.getElementById("editName").value = name;
     document.getElementById("editPrice").value = price;
     document.getElementById("editNext").value = next;
-
     document.getElementById("editForm").action = "/edit/" + id;
 }
 
@@ -169,7 +148,6 @@ function closeModals() {
 }
 </script>
 
-<!-- Chart -->
 <script>
 const labels = {{ labels | tojson }};
 const values = {{ values | tojson }};
@@ -193,6 +171,7 @@ if (labels.length > 0) {
 
 </body>
 </html>
+
 
 
 
