@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <title>{{ title }}</title>
 
-    <!-- Tailwind CDN -->
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
+
 <body class="bg-gray-50 font-sans">
 
 <div class="flex h-screen">
@@ -53,6 +56,14 @@
             </div>
         </div>
 
+        <!-- Chart -->
+        <div class="bg-white p-6 rounded-xl shadow mb-8">
+            <h2 class="text-lg font-semibold mb-4">Harcama Dağılımı</h2>
+            <div class="max-w-md">
+                <canvas id="myChart"></canvas>
+            </div>
+        </div>
+
         <!-- Table -->
         <div class="bg-white rounded-xl shadow overflow-hidden mb-8">
             <table class="w-full text-sm text-left">
@@ -61,7 +72,6 @@
                     <th class="px-6 py-3">Abonelik</th>
                     <th class="px-6 py-3">Ücret</th>
                     <th class="px-6 py-3">Son Ödeme</th>
-                    <th class="px-6 py-3"></th>
                 </tr>
                 </thead>
                 <tbody>
@@ -70,12 +80,6 @@
                     <td class="px-6 py-3 font-medium">{{ s.name }}</td>
                     <td class="px-6 py-3">₺{{ s.price }}</td>
                     <td class="px-6 py-3">{{ s.next }}</td>
-                    <td class="px-6 py-3 text-right">
-                        <a href="/delete/{{ loop.index0 }}"
-                           class="text-red-500 hover:underline">
-                            Sil
-                        </a>
-                    </td>
                 </tr>
                 {% endfor %}
                 </tbody>
@@ -85,20 +89,23 @@
     </div>
 </div>
 
-<!-- Add Modal -->
-<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center">
+<!-- Modal -->
+<div id="modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
     <form method="POST" action="/add"
           class="bg-white p-6 rounded-xl w-96 space-y-4 shadow-lg">
 
         <h2 class="text-xl font-bold">Yeni Abonelik Ekle</h2>
 
         <input name="name" type="text" placeholder="Örn: Netflix"
+               required
                class="w-full border p-2 rounded-lg focus:outline-blue-500">
 
         <input name="price" type="number" placeholder="Ücret"
+               required
                class="w-full border p-2 rounded-lg focus:outline-blue-500">
 
         <input name="next" type="date"
+               required
                class="w-full border p-2 rounded-lg focus:outline-blue-500">
 
         <div class="flex justify-between">
@@ -114,8 +121,31 @@
     </form>
 </div>
 
+<!-- Chart Script -->
+<script>
+const labels = {{ labels | tojson }};
+const values = {{ values | tojson }};
+
+if (labels.length > 0) {
+    new Chart(document.getElementById('myChart'), {
+        type: 'pie',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: values,
+                backgroundColor: [
+                    '#2563eb','#16a34a','#dc2626','#9333ea',
+                    '#f97316','#0d9488','#eab308','#6b7280'
+                ]
+            }]
+        }
+    });
+}
+</script>
+
 </body>
 </html>
+
 
 
 
