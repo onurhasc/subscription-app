@@ -8,12 +8,27 @@ from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# Email & scheduler
+import smtplib
+from email.mime.text import MIMEText
+from datetime import datetime, timedelta
+from apscheduler.schedulers.background import BackgroundScheduler
+
 app = Flask(__name__)
 app.secret_key = "supersecretkey"
 
 DB = "database.db"
 
+# =========================
+# EMAIL AYARLARI (BURAYI DEĞİŞTİR)
+# =========================
+EMAIL_ADDRESS = "seninmail@gmail.com"
+EMAIL_PASSWORD = "GMAIL_APP_PASSWORD"
 
+
+# =========================
+# DATABASE
+# =========================
 def init_db():
     with sqlite3.connect(DB) as con:
         cur = con.cursor()
@@ -46,6 +61,59 @@ def get_db():
     return sqlite3.connect(DB)
 
 
+# =========================
+# EMAIL FUNCTIONS
+# =========================
+def send_email(to, subject, body):
+    msg = MIMEText(body)
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = to
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.send_message(msg)
+
+
+def check_reminders():
+    today = datetime.now().date()
+    tomorrow = today + timedelta(days=1)
+
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("""
+        SELECT users.email, subscriptions.name, subscriptions.price, subscriptions.next
+        FROM subscriptions
+        JOIN users ON subscriptions.user_id = users.id
+    """)
+
+    rows = cur.fetchall()
+
+    for email, name, price, next_date in rows:
+        try:
+            due_date = datetime.strptime(next_date, "%Y-%m-%d").date()
+        except:
+            continue
+
+        if due_date == today or due_date == tomorrow:
+            subject = f"{name} aboneliğiniz yaklaşıyor"
+            body = f"""
+Merhaba,
+
+{name} aboneliğinizin ödeme tarihi yaklaşıyor.
+
+Ödeme tarihi: {due_date}
+Tutar: ₺{price}
+
+SubTrack
+"""
+            send_email(email, subject, body)
+
+
+# =========================
+# AUTH
+# =========================
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -95,6 +163,9 @@ def logout():
     return redirect("/login")
 
 
+# =========================
+# DASHBOARD
+# =========================
 @app.route("/")
 def dashboard():
     if "user_id" not in session:
@@ -134,6 +205,9 @@ def dashboard():
     )
 
 
+# =========================
+# CRUD
+# =========================
 @app.route("/add", methods=["POST"])
 def add():
     if "user_id" not in session:
@@ -169,8 +243,6 @@ def delete(sub_id):
 
     con = get_db()
     cur = con.cursor()
-
-    # Sadece kendi aboneliğini silebilir
     cur.execute(
         "DELETE FROM subscriptions WHERE id=? AND user_id=?",
         (sub_id, session["user_id"])
@@ -179,9 +251,42 @@ def delete(sub_id):
 
     return redirect("/")
 
+@app.route("/test-mail")
+def test_mail():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("SELECT email FROM users WHERE id=?", (session["user_id"],))
+    user = cur.fetchone()
+
+    if not user:
+        return "User not found"
+
+    email = user[0]
+
+    send_email(
+        email,
+        "SubTrack Test Maili",
+        "Bu bir test mailidir. Mail sistemi çalışıyor."
+    )
+
+    return "Test maili gönderildi. Mail kutunu kontrol et."
+ 
+    
+# =========================
+# SCHEDULER
+# =========================
+scheduler = BackgroundScheduler()
+scheduler.add_job(check_reminders, "interval", hours=24)
+scheduler.start()
+
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
 
 
 
