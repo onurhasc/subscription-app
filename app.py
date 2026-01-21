@@ -1,20 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 Created on Tue Jan 20 13:07:33 2026
-
 @author: PC
 """
+
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-
-# Email & scheduler
-import smtplib
-from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-
 import os
+import requests
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
@@ -22,11 +18,9 @@ app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 DB = "database.db"
 
 # =========================
-# EMAIL (ENV VARIABLES)
+# RESEND CONFIG
 # =========================
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 # =========================
 # DATABASE
@@ -55,36 +49,42 @@ def init_db():
 
         con.commit()
 
-
 init_db()
-
 
 def get_db():
     return sqlite3.connect(DB)
 
-
 # =========================
-# EMAIL FUNCTIONS
+# EMAIL (RESEND)
 # =========================
 def send_email(to, subject, body):
-    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        print("Email ayarları eksik.")
+    if not RESEND_API_KEY:
+        print("RESEND_API_KEY eksik.")
         return
 
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_ADDRESS
-    msg["To"] = to
+    url = "https://api.resend.com/emails"
+
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "from": "SubTrack <onboarding@resend.dev>",
+        "to": [to],
+        "subject": subject,
+        "html": f"<p>{body}</p>"
+    }
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(msg)
-            print(f"Mail gönderildi -> {to}")
+        response = requests.post(url, headers=headers, json=data)
+        print("Resend response:", response.status_code, response.text)
     except Exception as e:
-        print("Mail gönderme hatası:", e)
+        print("Resend error:", e)
 
-
+# =========================
+# REMINDER SYSTEM
+# =========================
 def check_reminders():
     today = datetime.now().date()
     tomorrow = today + timedelta(days=1)
@@ -109,17 +109,13 @@ def check_reminders():
         if due_date == today or due_date == tomorrow:
             subject = f"{name} aboneliğiniz yaklaşıyor"
             body = f"""
-Merhaba,
-
-{name} aboneliğinizin ödeme tarihi yaklaşıyor.
-
-Ödeme tarihi: {due_date}
-Tutar: ₺{price}
-
+Merhaba,<br><br>
+{name} aboneliğinizin ödeme tarihi yaklaşıyor.<br><br>
+Ödeme tarihi: {due_date}<br>
+Tutar: ₺{price}<br><br>
 SubTrack
 """
             send_email(email, subject, body)
-
 
 # =========================
 # AUTH
@@ -146,7 +142,6 @@ def register():
 
     return render_template("register.html")
 
-
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -166,12 +161,10 @@ def login():
 
     return render_template("login.html")
 
-
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect("/login")
-
 
 # =========================
 # DASHBOARD
@@ -214,7 +207,6 @@ def dashboard():
         title="Dashboard"
     )
 
-
 # =========================
 # CRUD
 # =========================
@@ -245,7 +237,6 @@ def add():
 
     return redirect("/")
 
-
 @app.route("/delete/<int:sub_id>")
 def delete(sub_id):
     if "user_id" not in session:
@@ -261,7 +252,9 @@ def delete(sub_id):
 
     return redirect("/")
 
-
+# =========================
+# TEST MAIL
+# =========================
 @app.route("/test-mail")
 def test_mail():
     if "user_id" not in session:
@@ -285,23 +278,17 @@ def test_mail():
 
     return "Test maili gönderildi. Mail kutunu kontrol et."
 
-
 # =========================
-# SAFE SCHEDULER START
+# START APP
 # =========================
-def start_scheduler():
+if __name__ == "__main__":
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(check_reminders, "interval", hours=24)
     scheduler.start()
     print("Scheduler started")
 
-
-
-
-
-if __name__ == "__main__":
-    start_scheduler()
     app.run(debug=True)
+
 
 
 
