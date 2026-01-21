@@ -14,16 +14,18 @@ from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 
+import os
+
 app = Flask(__name__)
-app.secret_key = "supersecretkey"
+app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
 DB = "database.db"
 
 # =========================
-# EMAIL AYARLARI (BURAYI DEĞİŞTİR)
+# EMAIL (ENV VARIABLES)
 # =========================
-EMAIL_ADDRESS = "seninmail@gmail.com"
-EMAIL_PASSWORD = "GMAIL_APP_PASSWORD"
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
 
 # =========================
@@ -65,14 +67,22 @@ def get_db():
 # EMAIL FUNCTIONS
 # =========================
 def send_email(to, subject, body):
+    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+        print("Email ayarları eksik.")
+        return
+
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = EMAIL_ADDRESS
     msg["To"] = to
 
-    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.send_message(msg)
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+            server.send_message(msg)
+            print(f"Mail gönderildi -> {to}")
+    except Exception as e:
+        print("Mail gönderme hatası:", e)
 
 
 def check_reminders():
@@ -251,6 +261,7 @@ def delete(sub_id):
 
     return redirect("/")
 
+
 @app.route("/test-mail")
 def test_mail():
     if "user_id" not in session:
@@ -273,18 +284,23 @@ def test_mail():
     )
 
     return "Test maili gönderildi. Mail kutunu kontrol et."
- 
-    
+
+
 # =========================
-# SCHEDULER
+# SAFE SCHEDULER START
 # =========================
-scheduler = BackgroundScheduler()
-scheduler.add_job(check_reminders, "interval", hours=24)
-scheduler.start()
+def start_scheduler():
+    scheduler = BackgroundScheduler(daemon=True)
+    scheduler.add_job(check_reminders, "interval", hours=24)
+    scheduler.start()
+
+
+start_scheduler()
 
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
