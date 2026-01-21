@@ -293,15 +293,15 @@ def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.add_job(check_reminders, "interval", hours=24)
     scheduler.start()
+    print("Scheduler started")
 
 
-start_scheduler()
+
 
 
 if __name__ == "__main__":
+    start_scheduler()
     app.run(debug=True)
-
-
 
 
 
