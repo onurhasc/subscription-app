@@ -7,6 +7,7 @@ Created on Tue Jan 20 13:07:33 2026
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
@@ -14,6 +15,7 @@ import os
 import requests
 import psycopg2
 from urllib.parse import urlparse
+import secrets
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
@@ -22,7 +24,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 # =========================
-# DATABASE (PostgreSQL)
+# DATABASE
 # =========================
 def get_db():
     url = urlparse(DATABASE_URL)
@@ -42,7 +44,9 @@ def init_db():
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         email TEXT UNIQUE,
-        password TEXT
+        password TEXT,
+        is_verified BOOLEAN DEFAULT FALSE,
+        verification_token TEXT
     )
     """)
 
@@ -63,7 +67,7 @@ def init_db():
 init_db()
 
 # =========================
-# EMAIL (RESEND)
+# EMAIL
 # =========================
 def send_email(to, subject, body):
     if not RESEND_API_KEY:
@@ -80,48 +84,14 @@ def send_email(to, subject, body):
         "from": "SubTrack <onboarding@resend.dev>",
         "to": [to],
         "subject": subject,
-        "html": f"<p>{body}</p>"
+        "html": body
     }
 
     r = requests.post(url, headers=headers, json=data)
-    print("Resend:", r.status_code, r.text)
+    print(r.status_code, r.text)
 
 # =========================
-# REMINDERS
-# =========================
-def check_reminders():
-    today = datetime.now().date()
-    tomorrow = today + timedelta(days=1)
-
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("""
-        SELECT users.email, subscriptions.name, subscriptions.price, subscriptions.next
-        FROM subscriptions
-        JOIN users ON subscriptions.user_id = users.id
-    """)
-
-    rows = cur.fetchall()
-
-    for email, name, price, next_date in rows:
-        try:
-            due_date = datetime.strptime(next_date, "%Y-%m-%d").date()
-        except:
-            continue
-
-        if due_date in (today, tomorrow):
-            send_email(
-                email,
-                f"{name} aboneliğiniz yaklaşıyor",
-                f"{name} aboneliğinizin ödeme tarihi: {due_date} - Tutar: ₺{price}"
-            )
-
-    cur.close()
-    con.close()
-
-# =========================
-# AUTH
+# REGISTER
 # =========================
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -130,22 +100,63 @@ def register():
         password_raw = request.form.get("password")
 
         password = generate_password_hash(password_raw)
+        token = secrets.token_urlsafe(32)
 
         con = get_db()
         cur = con.cursor()
 
         try:
-            cur.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, password))
+            cur.execute(
+                "INSERT INTO users (email, password, verification_token) VALUES (%s, %s, %s)",
+                (email, password, token)
+            )
             con.commit()
         except:
             return "User already exists"
 
-        cur.close()
-        con.close()
-        return redirect("/login")
+        verify_link = f"https://subscription-app-1.onrender.com/verify-email?token={token}"
+
+        send_email(
+            email,
+            "Email doğrulama",
+            f"""
+            <h3>SubTrack</h3>
+            <p>Hesabını doğrulamak için aşağıdaki linke tıkla:</p>
+            <a href="{verify_link}">{verify_link}</a>
+            """
+        )
+
+        return "Kayıt alındı. Email adresini doğrula."
 
     return render_template("register.html")
 
+# =========================
+# VERIFY
+# =========================
+@app.route("/verify-email")
+def verify_email():
+    token = request.args.get("token")
+
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute(
+        "UPDATE users SET is_verified = TRUE, verification_token = NULL WHERE verification_token = %s",
+        (token,)
+    )
+
+    if cur.rowcount == 0:
+        return "Geçersiz token"
+
+    con.commit()
+    cur.close()
+    con.close()
+
+    return "Email doğrulandı. Giriş yapabilirsin."
+
+# =========================
+# LOGIN
+# =========================
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -155,23 +166,25 @@ def login():
         con = get_db()
         cur = con.cursor()
 
-        cur.execute("SELECT id, password FROM users WHERE email=%s", (email,))
+        cur.execute("SELECT id, password, is_verified FROM users WHERE email=%s", (email,))
         user = cur.fetchone()
 
         cur.close()
         con.close()
 
-        if user and check_password_hash(user[1], password):
+        if not user:
+            return "User not found"
+
+        if not user[2]:
+            return "Email doğrulanmamış"
+
+        if check_password_hash(user[1], password):
             session["user_id"] = user[0]
             return redirect("/")
+
         return "Wrong credentials"
 
     return render_template("login.html")
-
-@app.route("/logout")
-def logout():
-    session.clear()
-    return redirect("/login")
 
 # =========================
 # DASHBOARD
@@ -181,102 +194,11 @@ def dashboard():
     if "user_id" not in session:
         return redirect("/login")
 
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("SELECT id, name, price, next FROM subscriptions WHERE user_id=%s", (session["user_id"],))
-    rows = cur.fetchall()
-
-    subs = [{"id": r[0], "name": r[1], "price": r[2], "next": r[3]} for r in rows]
-
-    cur.close()
-    con.close()
-
-    total = sum(s["price"] for s in subs)
-    count = len(subs)
-    most_expensive = max(subs, key=lambda s: s["price"])["name"] if subs else "-"
-
-    return render_template(
-        "dashboard.html",
-        subscriptions=subs,
-        total=total,
-        count=count,
-        most_expensive=most_expensive,
-        labels=[s["name"] for s in subs],
-        values=[s["price"] for s in subs],
-        title="Dashboard"
-    )
-
-# =========================
-# CRUD
-# =========================
-@app.route("/add", methods=["POST"])
-def add():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    name = request.form.get("name")
-    price = request.form.get("price")
-    next_date = request.form.get("next")
-
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute(
-        "INSERT INTO subscriptions (user_id, name, price, next) VALUES (%s, %s, %s, %s)",
-        (session["user_id"], name, price, next_date)
-    )
-    con.commit()
-
-    cur.close()
-    con.close()
-    return redirect("/")
-
-@app.route("/delete/<int:sub_id>")
-def delete(sub_id):
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("DELETE FROM subscriptions WHERE id=%s AND user_id=%s", (sub_id, session["user_id"]))
-    con.commit()
-
-    cur.close()
-    con.close()
-    return redirect("/")
-
-# =========================
-# TEST MAIL
-# =========================
-@app.route("/test-mail")
-def test_mail():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("SELECT email FROM users WHERE id=%s", (session["user_id"],))
-    email = cur.fetchone()[0]
-
-    cur.close()
-    con.close()
-
-    send_email(email, "SubTrack Test Maili", "Bu test mailidir")
-    return "Test mail gönderildi"
-
-# =========================
-# CRON
-# =========================
-@app.route("/_cron_run_reminders")
-def cron_run():
-    if request.args.get("key") != os.getenv("CRON_SECRET"):
-        return "Forbidden", 403
-
-    check_reminders()
-    return "Reminders executed"
+    return "Dashboard çalışıyor (email doğrulama başarılı)"
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
