@@ -29,22 +29,33 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 BASE_URL = "https://subscription-app-1.onrender.com"
 
 # =========================
-# DATABASE
+# DATABASE (WITH MIGRATION)
 # =========================
 def init_db():
     with sqlite3.connect(DB) as con:
         cur = con.cursor()
 
+        # Ana tablo
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE,
-            password TEXT,
-            is_verified INTEGER DEFAULT 0,
-            verification_token TEXT
+            password TEXT
         )
         """)
 
+        # Migration: kolonlar yoksa ekle
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0")
+        except:
+            pass
+
+        try:
+            cur.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
+        except:
+            pass
+
+        # Subscriptions
         cur.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,8 +126,8 @@ def register():
             )
 
             return "Kayıt başarılı. Mailine gelen linkle hesabını doğrula."
-        except:
-            return "User already exists"
+        except Exception as e:
+            return f"Hata oluştu: {e}"
 
     return render_template("register.html")
 
@@ -221,6 +232,7 @@ start_scheduler()
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
