@@ -4,11 +4,11 @@ Created on Tue Jan 20 13:07:33 2026
 @author: PC
 """
 
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
-from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import requests
 
@@ -21,6 +21,7 @@ DB = "database.db"
 # RESEND CONFIG
 # =========================
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+CRON_SECRET = os.getenv("CRON_SECRET")
 
 # =========================
 # DATABASE
@@ -59,7 +60,7 @@ def get_db():
 # =========================
 def send_email(to, subject, body):
     if not RESEND_API_KEY:
-        print("RESEND_API_KEY eksik.")
+        print("RESEND_API_KEY eksik")
         return
 
     url = "https://api.resend.com/emails"
@@ -78,12 +79,12 @@ def send_email(to, subject, body):
 
     try:
         response = requests.post(url, headers=headers, json=data)
-        print("Resend response:", response.status_code, response.text)
+        print("Resend:", response.status_code, response.text)
     except Exception as e:
         print("Resend error:", e)
 
 # =========================
-# REMINDER SYSTEM
+# REMINDERS
 # =========================
 def check_reminders():
     today = datetime.now().date()
@@ -110,8 +111,8 @@ def check_reminders():
             subject = f"{name} aboneliğiniz yaklaşıyor"
             body = f"""
 Merhaba,<br><br>
-{name} aboneliğinizin ödeme tarihi yaklaşıyor.<br><br>
-Ödeme tarihi: {due_date}<br>
+{name} aboneliğinizin ödeme tarihi yaklaşıyor.<br>
+Tarih: {due_date}<br>
 Tutar: ₺{price}<br><br>
 SubTrack
 """
@@ -215,17 +216,9 @@ def add():
     if "user_id" not in session:
         return redirect("/login")
 
-    name = request.form.get("name", "").strip()
-    price_raw = request.form.get("price", "").strip()
-    next_date = request.form.get("next", "").strip()
-
-    if not name or not price_raw or not next_date:
-        return redirect("/")
-
-    try:
-        price = int(price_raw)
-    except:
-        return redirect("/")
+    name = request.form.get("name")
+    price = request.form.get("price")
+    next_date = request.form.get("next")
 
     con = get_db()
     cur = con.cursor()
@@ -268,26 +261,32 @@ def test_mail():
     if not user:
         return "User not found"
 
-    email = user[0]
-
     send_email(
-        email,
+        user[0],
         "SubTrack Test Maili",
-        "Bu bir test mailidir. Mail sistemi çalışıyor."
+        "Bu bir test mailidir."
     )
 
-    return "Test maili gönderildi. Mail kutunu kontrol et."
+    return "Test maili gönderildi"
 
 # =========================
-# START APP
+# CRON ENDPOINT (GİZLİ)
+# =========================
+@app.route("/_cron_run_reminders")
+def cron_run():
+    if request.args.get("key") != CRON_SECRET:
+        return "Forbidden", 403
+
+    check_reminders()
+    return "Reminders executed"
+
+# =========================
+# RUN
 # =========================
 if __name__ == "__main__":
-    scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(check_reminders, "interval", hours=24)
-    scheduler.start()
-    print("Scheduler started")
-
     app.run(debug=True)
+
+
 
 
 
