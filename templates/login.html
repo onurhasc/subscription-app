@@ -1,21 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Login</title>
+  <title>Giriş Yap | SubTrack</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="flex justify-center items-center h-screen bg-gray-100">
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
 
-<form method="POST" class="bg-white p-8 rounded-xl shadow w-96 space-y-4">
-  <h2 class="text-2xl font-bold">Login</h2>
+<div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
+  <h2 class="text-2xl font-bold text-center mb-6">SubTrack</h2>
 
-  <input name="email" placeholder="Email" required class="w-full border p-2 rounded">
-  <input name="password" type="password" placeholder="Password" required class="w-full border p-2 rounded">
+  <form method="POST" class="space-y-4">
+    <input name="email" type="email" placeholder="Email"
+           required class="w-full border p-2 rounded">
 
-  <button class="bg-black text-white w-full p-2 rounded">Login</button>
+    <input name="password" type="password" placeholder="Şifre"
+           required class="w-full border p-2 rounded">
 
-  <p class="text-sm">No account? <a href="/register" class="text-blue-500">Register</a></p>
-</form>
+    <button class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">
+      Giriş Yap
+    </button>
+  </form>
+
+  <div class="mt-4 text-center text-sm">
+    <a href="/forgot-password" class="text-blue-600 hover:underline">
+      Şifremi unuttum?
+    </a>
+  </div>
+
+  <div class="mt-2 text-center text-sm">
+    Hesabın yok mu?
+    <a href="/register" class="text-blue-600 hover:underline">Kayıt ol</a>
+  </div>
+</div>
 
 </body>
 </html>

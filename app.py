@@ -225,12 +225,7 @@ def forgot_password():
 
         return "Mail gönderildi"
 
-    return """
-    <form method="POST">
-        <input name="email" placeholder="Email" required>
-        <button>Reset</button>
-    </form>
-    """
+    return render_template("forgot_password.html")
 
 
 @app.route("/reset-password/<token>", methods=["GET", "POST"])
@@ -255,14 +250,10 @@ def reset_password(token):
         """, (hashed, user[0]))
         con.commit()
 
-        return "Şifre güncellendi"
+        return "Şifre güncellendi. Artık giriş yapabilirsin."
 
-    return """
-    <form method="POST">
-        <input name="password" type="password" placeholder="Yeni şifre" required>
-        <button>Kaydet</button>
-    </form>
-    """
+    return render_template("reset_password.html")
+
 
 # =========================
 # DASHBOARD
