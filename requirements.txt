@@ -1,5 +1,5 @@
 Flask
 Werkzeug
 gunicorn
-APScheduler
 requests
+psycopg2-binary

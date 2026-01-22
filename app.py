@@ -6,54 +6,61 @@ Created on Tue Jan 20 13:07:33 2026
 
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, session
-import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 import os
 import requests
+import psycopg2
+from urllib.parse import urlparse
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
-DB = "database.db"
-
-# =========================
-# RESEND CONFIG
-# =========================
+DATABASE_URL = os.getenv("DATABASE_URL")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 # =========================
-# DATABASE
+# DATABASE (PostgreSQL)
 # =========================
+def get_db():
+    url = urlparse(DATABASE_URL)
+    return psycopg2.connect(
+        dbname=url.path[1:],
+        user=url.username,
+        password=url.password,
+        host=url.hostname,
+        port=url.port
+    )
+
 def init_db():
-    with sqlite3.connect(DB) as con:
-        cur = con.cursor()
+    con = get_db()
+    cur = con.cursor()
 
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE,
-            password TEXT
-        )
-        """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        email TEXT UNIQUE,
+        password TEXT
+    )
+    """)
 
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            name TEXT,
-            price INTEGER,
-            next TEXT
-        )
-        """)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id INTEGER,
+        name TEXT,
+        price INTEGER,
+        next TEXT
+    )
+    """)
 
-        con.commit()
+    con.commit()
+    cur.close()
+    con.close()
 
 init_db()
-
-def get_db():
-    return sqlite3.connect(DB)
 
 # =========================
 # EMAIL (RESEND)
@@ -76,11 +83,8 @@ def send_email(to, subject, body):
         "html": f"<p>{body}</p>"
     }
 
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        print("Resend:", response.status_code, response.text)
-    except Exception as e:
-        print("Resend error:", e)
+    r = requests.post(url, headers=headers, json=data)
+    print("Resend:", r.status_code, r.text)
 
 # =========================
 # REMINDERS
@@ -106,16 +110,15 @@ def check_reminders():
         except:
             continue
 
-        if due_date == today or due_date == tomorrow:
-            subject = f"{name} aboneliğiniz yaklaşıyor"
-            body = f"""
-Merhaba,<br><br>
-{name} aboneliğinizin ödeme tarihi yaklaşıyor.<br>
-Tarih: {due_date}<br>
-Tutar: ₺{price}<br><br>
-SubTrack
-"""
-            send_email(email, subject, body)
+        if due_date in (today, tomorrow):
+            send_email(
+                email,
+                f"{name} aboneliğiniz yaklaşıyor",
+                f"{name} aboneliğinizin ödeme tarihi: {due_date} - Tutar: ₺{price}"
+            )
+
+    cur.close()
+    con.close()
 
 # =========================
 # AUTH
@@ -126,19 +129,20 @@ def register():
         email = request.form.get("email")
         password_raw = request.form.get("password")
 
-        if not email or not password_raw:
-            return "Email ve şifre boş olamaz"
-
         password = generate_password_hash(password_raw)
 
+        con = get_db()
+        cur = con.cursor()
+
         try:
-            con = get_db()
-            cur = con.cursor()
-            cur.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, password))
+            cur.execute("INSERT INTO users (email, password) VALUES (%s, %s)", (email, password))
             con.commit()
-            return redirect("/login")
         except:
             return "User already exists"
+
+        cur.close()
+        con.close()
+        return redirect("/login")
 
     return render_template("register.html")
 
@@ -150,14 +154,17 @@ def login():
 
         con = get_db()
         cur = con.cursor()
-        cur.execute("SELECT id, password FROM users WHERE email=?", (email,))
+
+        cur.execute("SELECT id, password FROM users WHERE email=%s", (email,))
         user = cur.fetchone()
+
+        cur.close()
+        con.close()
 
         if user and check_password_hash(user[1], password):
             session["user_id"] = user[0]
             return redirect("/")
-        else:
-            return "Wrong credentials"
+        return "Wrong credentials"
 
     return render_template("login.html")
 
@@ -174,36 +181,29 @@ def dashboard():
     if "user_id" not in session:
         return redirect("/login")
 
-    user_id = session["user_id"]
-
     con = get_db()
     cur = con.cursor()
-    cur.execute(
-        "SELECT id, name, price, next FROM subscriptions WHERE user_id=?",
-        (user_id,)
-    )
+
+    cur.execute("SELECT id, name, price, next FROM subscriptions WHERE user_id=%s", (session["user_id"],))
     rows = cur.fetchall()
 
-    subscriptions = [
-        {"id": r[0], "name": r[1], "price": r[2], "next": r[3]}
-        for r in rows
-    ]
+    subs = [{"id": r[0], "name": r[1], "price": r[2], "next": r[3]} for r in rows]
 
-    total = sum(s["price"] for s in subscriptions)
-    count = len(subscriptions)
-    most_expensive = max(subscriptions, key=lambda s: s["price"])["name"] if subscriptions else "-"
+    cur.close()
+    con.close()
 
-    labels = [s["name"] for s in subscriptions]
-    values = [s["price"] for s in subscriptions]
+    total = sum(s["price"] for s in subs)
+    count = len(subs)
+    most_expensive = max(subs, key=lambda s: s["price"])["name"] if subs else "-"
 
     return render_template(
         "dashboard.html",
-        subscriptions=subscriptions,
+        subscriptions=subs,
         total=total,
         count=count,
         most_expensive=most_expensive,
-        labels=labels,
-        values=values,
+        labels=[s["name"] for s in subs],
+        values=[s["price"] for s in subs],
         title="Dashboard"
     )
 
@@ -221,27 +221,27 @@ def add():
 
     con = get_db()
     cur = con.cursor()
+
     cur.execute(
-        "INSERT INTO subscriptions (user_id, name, price, next) VALUES (?, ?, ?, ?)",
+        "INSERT INTO subscriptions (user_id, name, price, next) VALUES (%s, %s, %s, %s)",
         (session["user_id"], name, price, next_date)
     )
     con.commit()
 
+    cur.close()
+    con.close()
     return redirect("/")
 
 @app.route("/delete/<int:sub_id>")
 def delete(sub_id):
-    if "user_id" not in session:
-        return redirect("/login")
-
     con = get_db()
     cur = con.cursor()
-    cur.execute(
-        "DELETE FROM subscriptions WHERE id=? AND user_id=?",
-        (sub_id, session["user_id"])
-    )
+
+    cur.execute("DELETE FROM subscriptions WHERE id=%s AND user_id=%s", (sub_id, session["user_id"]))
     con.commit()
 
+    cur.close()
+    con.close()
     return redirect("/")
 
 # =========================
@@ -254,33 +254,30 @@ def test_mail():
 
     con = get_db()
     cur = con.cursor()
-    cur.execute("SELECT email FROM users WHERE id=?", (session["user_id"],))
-    user = cur.fetchone()
 
-    if not user:
-        return "User not found"
+    cur.execute("SELECT email FROM users WHERE id=%s", (session["user_id"],))
+    email = cur.fetchone()[0]
 
-    send_email(user[0], "SubTrack Test Maili", "Bu bir test mailidir.")
-    return "Test maili gönderildi"
+    cur.close()
+    con.close()
+
+    send_email(email, "SubTrack Test Maili", "Bu test mailidir")
+    return "Test mail gönderildi"
 
 # =========================
-# CRON ENDPOINT (DÜZELTİLDİ)
+# CRON
 # =========================
 @app.route("/_cron_run_reminders")
 def cron_run():
-    cron_secret = os.getenv("CRON_SECRET")
-
-    if request.args.get("key") != cron_secret:
+    if request.args.get("key") != os.getenv("CRON_SECRET"):
         return "Forbidden", 403
 
     check_reminders()
     return "Reminders executed"
 
-# =========================
-# RUN
-# =========================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
