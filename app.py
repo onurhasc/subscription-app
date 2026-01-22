@@ -274,11 +274,9 @@ def test_mail():
 # =========================
 @app.route("/_cron_run_reminders")
 def cron_run():
-    if request.args.get("key") != CRON_SECRET:
-        return "Forbidden", 403
-
     check_reminders()
     return "Reminders executed"
+
 
 # =========================
 # RUN
