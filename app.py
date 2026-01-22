@@ -11,8 +11,9 @@ Created on Tue Jan 20 13:07:33 2026
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-import smtplib
-from email.mime.text import MIMEText
+
+import requests
+
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
@@ -76,28 +77,32 @@ def get_db():
 # =========================
 # EMAIL
 # =========================
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
+
 def send_email(to, subject, body):
-    if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
-        print("Email env eksik")
+    if not RESEND_API_KEY:
+        print("RESEND_API_KEY eksik")
         return
 
+    url = "https://api.resend.com/emails"
+
+    headers = {
+        "Authorization": f"Bearer {RESEND_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "from": "SubTrack <onboarding@resend.dev>",
+        "to": [to],
+        "subject": subject,
+        "html": body.replace("\n", "<br>")
+    }
+
     try:
-        msg = MIMEText(body)
-        msg["Subject"] = subject
-        msg["From"] = EMAIL_ADDRESS
-        msg["To"] = to
-
-        # Timeout ekliyoruz (en kritik nokta)
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=5)
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-
-        print("Mail gönderildi:", to)
-
+        response = requests.post(url, headers=headers, json=data, timeout=5)
+        print("Resend status:", response.status_code, response.text)
     except Exception as e:
-        # ❗ Mail gönderilemese bile sistem ÇÖKMESİN
-        print("Mail gönderilemedi ama sistem devam ediyor:", e)
+        print("Resend hata:", e)
 
 
 # =========================
@@ -126,10 +131,15 @@ def register():
 
             verify_link = f"{BASE_URL}/verify/{token}"
             send_email(
-                email,
-                "Hesabını doğrula",
-                f"Hesabını aktifleştirmek için tıkla:\n{verify_link}"
-            )
+    email,
+    "Hesabını doğrula",
+    f"""
+    <h2>SubTrack hesabını doğrula</h2>
+    <p>Hesabını aktifleştirmek için aşağıdaki linke tıkla:</p>
+    <a href="{verify_link}">{verify_link}</a>
+    """
+)
+
 
             return "Kayıt başarılı. Mailine gelen linkle hesabını doğrula."
         except Exception as e:
