@@ -11,13 +11,12 @@ Created on Tue Jan 20 13:07:33 2026
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-
 import smtplib
 from email.mime.text import MIMEText
 from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
-
 import os
+import uuid
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
@@ -26,6 +25,8 @@ DB = "database.db"
 
 EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+
+BASE_URL = "https://subscription-app-1.onrender.com"
 
 # =========================
 # DATABASE
@@ -38,7 +39,9 @@ def init_db():
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE,
-            password TEXT
+            password TEXT,
+            is_verified INTEGER DEFAULT 0,
+            verification_token TEXT
         )
         """)
 
@@ -81,37 +84,6 @@ def send_email(to, subject, body):
         print("Mail hatası:", e)
 
 # =========================
-# REMINDER JOB
-# =========================
-def check_reminders():
-    today = datetime.now().date()
-    tomorrow = today + timedelta(days=1)
-
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("""
-        SELECT users.email, subscriptions.name, subscriptions.price, subscriptions.next
-        FROM subscriptions
-        JOIN users ON subscriptions.user_id = users.id
-    """)
-
-    rows = cur.fetchall()
-
-    for email, name, price, next_date in rows:
-        try:
-            due = datetime.strptime(next_date, "%Y-%m-%d").date()
-        except:
-            continue
-
-        if due == today or due == tomorrow:
-            send_email(
-                email,
-                f"{name} aboneliğiniz yaklaşıyor",
-                f"{name} için ödeme tarihi: {due} - ₺{price}"
-            )
-
-# =========================
 # AUTH
 # =========================
 @app.route("/register", methods=["GET", "POST"])
@@ -124,17 +96,50 @@ def register():
             return "Boş alan var"
 
         password = generate_password_hash(password_raw)
+        token = str(uuid.uuid4())
 
         try:
             con = get_db()
             cur = con.cursor()
-            cur.execute("INSERT INTO users (email, password) VALUES (?, ?)", (email, password))
+            cur.execute("""
+                INSERT INTO users (email, password, is_verified, verification_token)
+                VALUES (?, ?, 0, ?)
+            """, (email, password, token))
             con.commit()
-            return redirect("/login")
+
+            verify_link = f"{BASE_URL}/verify/{token}"
+            send_email(
+                email,
+                "Hesabını doğrula",
+                f"Hesabını aktifleştirmek için tıkla:\n{verify_link}"
+            )
+
+            return "Kayıt başarılı. Mailine gelen linkle hesabını doğrula."
         except:
             return "User already exists"
 
     return render_template("register.html")
+
+
+@app.route("/verify/<token>")
+def verify_email(token):
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("SELECT id FROM users WHERE verification_token=?", (token,))
+    user = cur.fetchone()
+
+    if not user:
+        return "Geçersiz doğrulama linki"
+
+    cur.execute("""
+        UPDATE users
+        SET is_verified=1, verification_token=NULL
+        WHERE id=?
+    """, (user[0],))
+    con.commit()
+
+    return "Email doğrulandı! Artık giriş yapabilirsin."
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -145,10 +150,16 @@ def login():
 
         con = get_db()
         cur = con.cursor()
-        cur.execute("SELECT id, password FROM users WHERE email=?", (email,))
+        cur.execute("SELECT id, password, is_verified FROM users WHERE email=?", (email,))
         user = cur.fetchone()
 
-        if user and check_password_hash(user[1], password):
+        if not user:
+            return "User not found"
+
+        if not user[2]:
+            return "Lütfen önce emailini doğrula"
+
+        if check_password_hash(user[1], password):
             session["user_id"] = user[0]
             return redirect("/")
         else:
@@ -188,57 +199,7 @@ def dashboard():
     )
 
 # =========================
-# CRUD
-# =========================
-@app.route("/add", methods=["POST"])
-def add():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    name = request.form.get("name")
-    price = request.form.get("price")
-    date = request.form.get("next")
-
-    if not name or not price or not date:
-        return redirect("/")
-
-    con = get_db()
-    cur = con.cursor()
-    cur.execute(
-        "INSERT INTO subscriptions (user_id, name, price, next) VALUES (?, ?, ?, ?)",
-        (session["user_id"], name, int(price), date)
-    )
-    con.commit()
-
-    return redirect("/")
-
-
-@app.route("/delete/<int:sub_id>")
-def delete(sub_id):
-    con = get_db()
-    cur = con.cursor()
-    cur.execute("DELETE FROM subscriptions WHERE id=?", (sub_id,))
-    con.commit()
-    return redirect("/")
-
-# =========================
-# TEST MAIL
-# =========================
-@app.route("/test-mail")
-def test_mail():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    con = get_db()
-    cur = con.cursor()
-    cur.execute("SELECT email FROM users WHERE id=?", (session["user_id"],))
-    email = cur.fetchone()[0]
-
-    send_email(email, "SubTrack Test", "Mail sistemi çalışıyor.")
-    return "Test mail gönderildi"
-
-# =========================
-# TEMP RESET ENDPOINT
+# RESET DB (DEV)
 # =========================
 @app.route("/__reset_db")
 def reset_db():
@@ -254,14 +215,13 @@ def reset_db():
 # =========================
 def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
-    scheduler.add_job(check_reminders, "interval", hours=24)
     scheduler.start()
-    print("Scheduler started")
 
 start_scheduler()
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
