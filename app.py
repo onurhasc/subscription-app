@@ -81,18 +81,24 @@ def send_email(to, subject, body):
         print("Email env eksik")
         return
 
-    msg = MIMEText(body)
-    msg["Subject"] = subject
-    msg["From"] = EMAIL_ADDRESS
-    msg["To"] = to
-
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
-            server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-            server.send_message(msg)
-            print("Mail gönderildi:", to)
+        msg = MIMEText(body)
+        msg["Subject"] = subject
+        msg["From"] = EMAIL_ADDRESS
+        msg["To"] = to
+
+        # Timeout ekliyoruz (en kritik nokta)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=5)
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        print("Mail gönderildi:", to)
+
     except Exception as e:
-        print("Mail hatası:", e)
+        # ❗ Mail gönderilemese bile sistem ÇÖKMESİN
+        print("Mail gönderilemedi ama sistem devam ediyor:", e)
+
 
 # =========================
 # AUTH
