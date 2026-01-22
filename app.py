@@ -214,12 +214,22 @@ def dashboard():
 # =========================
 @app.route("/__reset_db")
 def reset_db():
-    con = get_db()
-    cur = con.cursor()
-    cur.execute("DELETE FROM users;")
-    cur.execute("DELETE FROM subscriptions;")
-    con.commit()
-    return "Database reset OK"
+    try:
+        con = get_db()
+        cur = con.cursor()
+
+        cur.execute("DELETE FROM subscriptions;")
+        cur.execute("DELETE FROM users;")
+
+        con.commit()
+        cur.close()
+        con.close()
+
+        return "Database reset OK"
+
+    except Exception as e:
+        return f"Reset error: {e}"
+
 
 # =========================
 # SCHEDULER
