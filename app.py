@@ -8,13 +8,12 @@ Created on Tue Jan 20 13:07:33 2026
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
-
 import requests
-
-from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import uuid
@@ -23,20 +22,16 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
 DB = "database.db"
-
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-
 BASE_URL = "https://subscription-app-1.onrender.com"
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 # =========================
-# DATABASE (WITH MIGRATION)
+# DATABASE (SAFE MIGRATION)
 # =========================
 def init_db():
     with sqlite3.connect(DB) as con:
         cur = con.cursor()
 
-        # Ana tablo
         cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,18 +40,16 @@ def init_db():
         )
         """)
 
-        # Migration: kolonlar yoksa ekle
-        try:
-            cur.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0")
-        except:
-            pass
+        for column, ctype in [
+            ("is_verified", "INTEGER DEFAULT 0"),
+            ("verification_token", "TEXT"),
+            ("reset_token", "TEXT")
+        ]:
+            try:
+                cur.execute(f"ALTER TABLE users ADD COLUMN {column} {ctype}")
+            except:
+                pass
 
-        try:
-            cur.execute("ALTER TABLE users ADD COLUMN verification_token TEXT")
-        except:
-            pass
-
-        # Subscriptions
         cur.execute("""
         CREATE TABLE IF NOT EXISTS subscriptions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -75,17 +68,14 @@ def get_db():
     return sqlite3.connect(DB)
 
 # =========================
-# EMAIL
+# EMAIL (RESEND)
 # =========================
-RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-
 def send_email(to, subject, body):
     if not RESEND_API_KEY:
         print("RESEND_API_KEY eksik")
         return
 
     url = "https://api.resend.com/emails"
-
     headers = {
         "Authorization": f"Bearer {RESEND_API_KEY}",
         "Content-Type": "application/json"
@@ -95,15 +85,14 @@ def send_email(to, subject, body):
         "from": "SubTrack <onboarding@resend.dev>",
         "to": [to],
         "subject": subject,
-        "html": body.replace("\n", "<br>")
+        "html": body
     }
 
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=5)
-        print("Resend status:", response.status_code, response.text)
+        r = requests.post(url, headers=headers, json=data, timeout=5)
+        print("Resend:", r.status_code, r.text)
     except Exception as e:
-        print("Resend hata:", e)
-
+        print("Email error:", e)
 
 # =========================
 # AUTH
@@ -117,8 +106,8 @@ def register():
         if not email or not password_raw:
             return "Boş alan var"
 
-        password = generate_password_hash(password_raw)
         token = str(uuid.uuid4())
+        password = generate_password_hash(password_raw)
 
         try:
             con = get_db()
@@ -130,20 +119,21 @@ def register():
             con.commit()
 
             verify_link = f"{BASE_URL}/verify/{token}"
+
             send_email(
-    email,
-    "Hesabını doğrula",
-    f"""
-    <h2>SubTrack hesabını doğrula</h2>
-    <p>Hesabını aktifleştirmek için aşağıdaki linke tıkla:</p>
-    <a href="{verify_link}">{verify_link}</a>
-    """
-)
+                email,
+                "Hesabını doğrula",
+                f"""
+                <h2>SubTrack hesabını doğrula</h2>
+                <p>Linke tıklayarak hesabını aktif et:</p>
+                <a href="{verify_link}">{verify_link}</a>
+                """
+            )
 
+            return "Kayıt başarılı. Mailini kontrol et."
 
-            return "Kayıt başarılı. Mailine gelen linkle hesabını doğrula."
         except Exception as e:
-            return f"Hata oluştu: {e}"
+            return f"Hata: {e}"
 
     return render_template("register.html")
 
@@ -157,7 +147,7 @@ def verify_email(token):
     user = cur.fetchone()
 
     if not user:
-        return "Geçersiz doğrulama linki"
+        return "Geçersiz link"
 
     cur.execute("""
         UPDATE users
@@ -166,7 +156,7 @@ def verify_email(token):
     """, (user[0],))
     con.commit()
 
-    return "Email doğrulandı! Artık giriş yapabilirsin."
+    return "Email doğrulandı. Giriş yapabilirsin."
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -184,13 +174,13 @@ def login():
             return "User not found"
 
         if not user[2]:
-            return "Lütfen önce emailini doğrula"
+            return "Email doğrulanmamış"
 
         if check_password_hash(user[1], password):
             session["user_id"] = user[0]
             return redirect("/")
         else:
-            return "Wrong credentials"
+            return "Wrong password"
 
     return render_template("login.html")
 
@@ -199,6 +189,80 @@ def login():
 def logout():
     session.clear()
     return redirect("/login")
+
+# =========================
+# FORGOT PASSWORD
+# =========================
+@app.route("/forgot-password", methods=["GET", "POST"])
+def forgot_password():
+    if request.method == "POST":
+        email = request.form.get("email")
+
+        con = get_db()
+        cur = con.cursor()
+        cur.execute("SELECT id FROM users WHERE email=?", (email,))
+        user = cur.fetchone()
+
+        if not user:
+            return "Email bulunamadı"
+
+        token = str(uuid.uuid4())
+
+        cur.execute("UPDATE users SET reset_token=? WHERE id=?", (token, user[0]))
+        con.commit()
+
+        reset_link = f"{BASE_URL}/reset-password/{token}"
+
+        send_email(
+            email,
+            "Şifre sıfırlama",
+            f"""
+            <h3>Şifre sıfırlama</h3>
+            <p>Yeni şifre belirlemek için:</p>
+            <a href="{reset_link}">{reset_link}</a>
+            """
+        )
+
+        return "Mail gönderildi"
+
+    return """
+    <form method="POST">
+        <input name="email" placeholder="Email" required>
+        <button>Reset</button>
+    </form>
+    """
+
+
+@app.route("/reset-password/<token>", methods=["GET", "POST"])
+def reset_password(token):
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("SELECT id FROM users WHERE reset_token=?", (token,))
+    user = cur.fetchone()
+
+    if not user:
+        return "Geçersiz token"
+
+    if request.method == "POST":
+        new_password = request.form.get("password")
+        hashed = generate_password_hash(new_password)
+
+        cur.execute("""
+            UPDATE users
+            SET password=?, reset_token=NULL
+            WHERE id=?
+        """, (hashed, user[0]))
+        con.commit()
+
+        return "Şifre güncellendi"
+
+    return """
+    <form method="POST">
+        <input name="password" type="password" placeholder="Yeni şifre" required>
+        <button>Kaydet</button>
+    </form>
+    """
 
 # =========================
 # DASHBOARD
@@ -226,29 +290,19 @@ def dashboard():
     )
 
 # =========================
-# RESET DB (DEV)
+# DEV RESET
 # =========================
 @app.route("/__reset_db")
 def reset_db():
-    try:
-        con = get_db()
-        cur = con.cursor()
-
-        cur.execute("DELETE FROM subscriptions;")
-        cur.execute("DELETE FROM users;")
-
-        con.commit()
-        cur.close()
-        con.close()
-
-        return "Database reset OK"
-
-    except Exception as e:
-        return f"Reset error: {e}"
-
+    con = get_db()
+    cur = con.cursor()
+    cur.execute("DELETE FROM users;")
+    cur.execute("DELETE FROM subscriptions;")
+    con.commit()
+    return "Database reset OK"
 
 # =========================
-# SCHEDULER
+# SCHEDULER SAFE
 # =========================
 def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
@@ -258,6 +312,8 @@ start_scheduler()
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
 
 
 
