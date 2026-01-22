@@ -5,6 +5,7 @@ Created on Tue Jan 20 13:07:33 2026
 """
 
 # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, redirect, session
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -21,7 +22,6 @@ DB = "database.db"
 # RESEND CONFIG
 # =========================
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
-CRON_SECRET = os.getenv("CRON_SECRET")
 
 # =========================
 # DATABASE
@@ -64,7 +64,6 @@ def send_email(to, subject, body):
         return
 
     url = "https://api.resend.com/emails"
-
     headers = {
         "Authorization": f"Bearer {RESEND_API_KEY}",
         "Content-Type": "application/json"
@@ -261,28 +260,28 @@ def test_mail():
     if not user:
         return "User not found"
 
-    send_email(
-        user[0],
-        "SubTrack Test Maili",
-        "Bu bir test mailidir."
-    )
-
+    send_email(user[0], "SubTrack Test Maili", "Bu bir test mailidir.")
     return "Test maili gönderildi"
 
 # =========================
-# CRON ENDPOINT (GİZLİ)
+# CRON ENDPOINT (DÜZELTİLDİ)
 # =========================
 @app.route("/_cron_run_reminders")
 def cron_run():
+    cron_secret = os.getenv("CRON_SECRET")
+
+    if request.args.get("key") != cron_secret:
+        return "Forbidden", 403
+
     check_reminders()
     return "Reminders executed"
-
 
 # =========================
 # RUN
 # =========================
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
