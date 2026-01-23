@@ -17,8 +17,11 @@
         <h2 class="text-2xl font-bold mb-6">SubTrack</h2>
         <nav class="space-y-3">
             <a href="/" class="block py-2 px-3 rounded hover:bg-gray-700">Dashboard</a>
-            <a href="#!" class="block py-2 px-3 rounded hover:bg-gray-700">Abonelikler</a>
-            <a href="#!" class="block py-2 px-3 rounded hover:bg-gray-700">Ayarlar</a>
+            <a href="/" class="block py-2 px-3 rounded hover:bg-gray-700">Abonelikler</a>
+
+            <!-- 🔥 BURASI GÜNCELLENDİ -->
+            <a href="/settings" class="block py-2 px-3 rounded hover:bg-gray-700">Ayarlar</a>
+
             <a href="/logout" class="block py-2 px-3 rounded hover:bg-gray-700">Çıkış Yap</a>
         </nav>
     </aside>
@@ -95,82 +98,15 @@
     </div>
 </div>
 
-<!-- Add Modal -->
-<div id="addModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
-    <form method="POST" action="/add" class="bg-white p-6 rounded-xl w-11/12 max-w-sm space-y-3">
-        <h2 class="text-lg font-bold">Yeni Abonelik</h2>
-        <input name="name" placeholder="Netflix" required class="w-full border p-2 rounded">
-        <input name="price" type="number" placeholder="Ücret" required class="w-full border p-2 rounded">
-        <input name="next" type="date" required class="w-full border p-2 rounded">
-        <div class="flex justify-between">
-            <button type="button" onclick="closeModals()" class="border px-3 py-1 rounded">İptal</button>
-            <button class="bg-blue-600 text-white px-3 py-1 rounded">Kaydet</button>
-        </div>
-    </form>
-</div>
-
-<!-- Edit Modal -->
-<div id="editModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center">
-    <form method="POST" id="editForm" class="bg-white p-6 rounded-xl w-11/12 max-w-sm space-y-3">
-        <h2 class="text-lg font-bold">Düzenle</h2>
-        <input name="name" id="editName" required class="w-full border p-2 rounded">
-        <input name="price" id="editPrice" type="number" required class="w-full border p-2 rounded">
-        <input name="next" id="editNext" type="date" required class="w-full border p-2 rounded">
-        <div class="flex justify-between">
-            <button type="button" onclick="closeModals()" class="border px-3 py-1 rounded">İptal</button>
-            <button class="bg-blue-600 text-white px-3 py-1 rounded">Güncelle</button>
-        </div>
-    </form>
-</div>
-
 <script>
 function toggleSidebar() {
     document.getElementById("sidebar").classList.toggle("-translate-x-full");
-}
-
-function openAddModal() {
-    closeModals();
-    document.getElementById("addModal").classList.remove("hidden");
-}
-
-function openEditModal(id, name, price, next) {
-    closeModals();
-    document.getElementById("editModal").classList.remove("hidden");
-    document.getElementById("editName").value = name;
-    document.getElementById("editPrice").value = price;
-    document.getElementById("editNext").value = next;
-    document.getElementById("editForm").action = "/edit/" + id;
-}
-
-function closeModals() {
-    document.getElementById("addModal").classList.add("hidden");
-    document.getElementById("editModal").classList.add("hidden");
-}
-</script>
-
-<script>
-const labels = {{ labels | tojson }};
-const values = {{ values | tojson }};
-
-if (labels.length > 0) {
-    new Chart(document.getElementById('myChart'), {
-        type: 'pie',
-        data: {
-            labels: labels,
-            datasets: [{
-                data: values,
-                backgroundColor: [
-                    '#2563eb','#16a34a','#dc2626','#9333ea',
-                    '#f97316','#0d9488','#eab308','#6b7280'
-                ]
-            }]
-        }
-    });
 }
 </script>
 
 </body>
 </html>
+
 
 
 

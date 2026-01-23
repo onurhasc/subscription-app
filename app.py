@@ -295,6 +295,54 @@ def reset_db():
 # =========================
 # SCHEDULER SAFE
 # =========================
+
+@app.route("/settings", methods=["GET", "POST"])
+def settings():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    con = get_db()
+    cur = con.cursor()
+
+    # Kullanıcının emailini al
+    cur.execute("SELECT email FROM users WHERE id=?", (session["user_id"],))
+    email = cur.fetchone()[0]
+
+    # Şifre değiştirme işlemi
+    if request.method == "POST":
+        current = request.form.get("current_password")
+        new = request.form.get("new_password")
+
+        cur.execute("SELECT password FROM users WHERE id=?", (session["user_id"],))
+        hashed = cur.fetchone()[0]
+
+        if not check_password_hash(hashed, current):
+            return "Mevcut şifre yanlış"
+
+        new_hashed = generate_password_hash(new)
+        cur.execute("UPDATE users SET password=? WHERE id=?", (new_hashed, session["user_id"]))
+        con.commit()
+
+        return "Şifre başarıyla güncellendi"
+
+    return render_template("settings.html", email=email)
+
+
+@app.route("/delete-account", methods=["POST"])
+def delete_account():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    con = get_db()
+    cur = con.cursor()
+
+    cur.execute("DELETE FROM subscriptions WHERE user_id=?", (session["user_id"],))
+    cur.execute("DELETE FROM users WHERE id=?", (session["user_id"],))
+    con.commit()
+
+    session.clear()
+    return "Hesabın silindi"
+
 def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
     scheduler.start()

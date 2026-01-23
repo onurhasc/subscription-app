@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ayarlar | SubTrack</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<div class="max-w-xl mx-auto p-6">
+  <h1 class="text-2xl font-bold mb-6">Ayarlar</h1>
+
+  <!-- Email -->
+  <div class="bg-white p-4 rounded shadow mb-6">
+    <h2 class="font-semibold mb-2">Hesap Bilgisi</h2>
+    <p>Email: <strong>{{ email }}</strong></p>
+  </div>
+
+  <!-- Şifre değiştirme -->
+  <div class="bg-white p-4 rounded shadow mb-6">
+    <h2 class="font-semibold mb-4">Şifre Değiştir</h2>
+
+    <form method="POST" class="space-y-3">
+      <input name="current_password" type="password" placeholder="Mevcut şifre"
+             required class="w-full border p-2 rounded">
+
+      <input name="new_password" type="password" placeholder="Yeni şifre"
+             required class="w-full border p-2 rounded">
+
+      <button class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+        Şifreyi Güncelle
+      </button>
+    </form>
+  </div>
+
+  <!-- Hesap sil -->
+  <div class="bg-white p-4 rounded shadow border border-red-200">
+    <h2 class="font-semibold mb-3 text-red-600">Tehlikeli Bölge</h2>
+
+    <form method="POST" action="/delete-account"
+          onsubmit="return confirm('Hesabını silmek istediğine emin misin?');">
+      <button class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+        Hesabı Sil
+      </button>
+    </form>
+  </div>
+
+  <div class="mt-6">
+    <a href="/" class="text-blue-600 hover:underline">← Dashboard’a dön</a>
+  </div>
+</div>
+
+</body>
+</html>
