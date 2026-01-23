@@ -10,93 +10,87 @@ Created on Tue Jan 20 13:07:33 2026
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
 # -*- coding: utf-8 -*-
-from flask import Flask, render_template, request, redirect, session
-import sqlite3
-from werkzeug.security import generate_password_hash, check_password_hash
-import requests
-from apscheduler.schedulers.background import BackgroundScheduler
 import os
 import uuid
+import requests
+from flask import Flask, render_template, request, redirect, session, flash
+from flask_sqlalchemy import SQLAlchemy
+from werkzeug.security import generate_password_hash, check_password_hash
+from apscheduler.schedulers.background import BackgroundScheduler
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "dev-secret")
 
-DB = "database.db"
 BASE_URL = "https://subscription-app-1.onrender.com"
 RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 
 # =========================
-# DATABASE (SAFE MIGRATION)
+# DATABASE CONFIG (POSTGRES)
 # =========================
-def init_db():
-    with sqlite3.connect(DB) as con:
-        cur = con.cursor()
 
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE,
-            password TEXT
-        )
-        """)
+DATABASE_URL = os.getenv("DATABASE_URL")
 
-        for column, ctype in [
-            ("is_verified", "INTEGER DEFAULT 0"),
-            ("verification_token", "TEXT"),
-            ("reset_token", "TEXT")
-        ]:
-            try:
-                cur.execute(f"ALTER TABLE users ADD COLUMN {column} {ctype}")
-            except:
-                pass
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            name TEXT,
-            price INTEGER,
-            next TEXT
-        )
-        """)
+app.config["SQLALCHEMY_DATABASE_URI"] = DATABASE_URL
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-        con.commit()
-
-init_db()
-
-def get_db():
-    return sqlite3.connect(DB)
+db = SQLAlchemy(app)
 
 # =========================
-# EMAIL (RESEND)
+# MODELS
 # =========================
+
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    email = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(300), nullable=False)
+    is_verified = db.Column(db.Boolean, default=False)
+    verification_token = db.Column(db.String(150), nullable=True)
+    reset_token = db.Column(db.String(150), nullable=True)
+
+class Subscription(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("user.id"))
+    name = db.Column(db.String(100))
+    price = db.Column(db.Integer)
+    next = db.Column(db.String(50))
+
+
+with app.app_context():
+    db.create_all()
+
+# =========================
+# EMAIL
+# =========================
+
 def send_email(to, subject, body):
     if not RESEND_API_KEY:
-        print("RESEND_API_KEY eksik")
         return
 
-    url = "https://api.resend.com/emails"
-    headers = {
-        "Authorization": f"Bearer {RESEND_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "from": "SubTrack <onboarding@resend.dev>",
-        "to": [to],
-        "subject": subject,
-        "html": body
-    }
-
     try:
-        r = requests.post(url, headers=headers, json=data, timeout=5)
-        print("Resend:", r.status_code, r.text)
-    except Exception as e:
-        print("Email error:", e)
+        requests.post(
+            "https://api.resend.com/emails",
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "from": "SubTrack <onboarding@resend.dev>",
+                "to": [to],
+                "subject": subject,
+                "html": body
+            },
+            timeout=5
+        )
+    except:
+        pass
 
 # =========================
 # AUTH
 # =========================
+
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
@@ -104,59 +98,52 @@ def register():
         password_raw = request.form.get("password")
 
         if not email or not password_raw:
-            return "Boş alan var"
+            flash("All fields required", "error")
+            return redirect("/register")
+
+        if User.query.filter_by(email=email).first():
+            flash("Email already registered", "error")
+            return redirect("/register")
 
         token = str(uuid.uuid4())
-        password = generate_password_hash(password_raw)
 
-        try:
-            con = get_db()
-            cur = con.cursor()
-            cur.execute("""
-                INSERT INTO users (email, password, is_verified, verification_token)
-                VALUES (?, ?, 0, ?)
-            """, (email, password, token))
-            con.commit()
+        user = User(
+            email=email,
+            password=generate_password_hash(password_raw),
+            verification_token=token
+        )
 
-            verify_link = f"{BASE_URL}/verify/{token}"
+        db.session.add(user)
+        db.session.commit()
 
-            send_email(
-                email,
-                "Hesabını doğrula",
-                f"""
-                <h2>SubTrack hesabını doğrula</h2>
-                <p>Linke tıklayarak hesabını aktif et:</p>
-                <a href="{verify_link}">{verify_link}</a>
-                """
-            )
+        verify_link = f"{BASE_URL}/verify/{token}"
 
-            return "Kayıt başarılı. Mailini kontrol et."
+        send_email(
+            email,
+            "Verify your account",
+            f"<a href='{verify_link}'>Verify account</a>"
+        )
 
-        except Exception as e:
-            return f"Hata: {e}"
+        flash("Check your email for verification link", "success")
+        return redirect("/login")
 
     return render_template("register.html")
 
 
 @app.route("/verify/<token>")
 def verify_email(token):
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("SELECT id FROM users WHERE verification_token=?", (token,))
-    user = cur.fetchone()
+    user = User.query.filter_by(verification_token=token).first()
 
     if not user:
-        return "Geçersiz link"
+        flash("Invalid verification link", "error")
+        return redirect("/login")
 
-    cur.execute("""
-        UPDATE users
-        SET is_verified=1, verification_token=NULL
-        WHERE id=?
-    """, (user[0],))
-    con.commit()
+    user.is_verified = True
+    user.verification_token = None
+    db.session.commit()
 
-    return "Email doğrulandı. Giriş yapabilirsin."
+    flash("Email verified. You can login now.", "success")
+    return redirect("/login")
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -165,22 +152,22 @@ def login():
         email = request.form.get("email")
         password = request.form.get("password")
 
-        con = get_db()
-        cur = con.cursor()
-        cur.execute("SELECT id, password, is_verified FROM users WHERE email=?", (email,))
-        user = cur.fetchone()
+        user = User.query.filter_by(email=email).first()
 
         if not user:
-            return "User not found"
+            flash("User not found", "error")
+            return redirect("/login")
 
-        if not user[2]:
-            return "Email doğrulanmamış"
+        if not user.is_verified:
+            flash("Please verify your email", "error")
+            return redirect("/login")
 
-        if check_password_hash(user[1], password):
-            session["user_id"] = user[0]
-            return redirect("/")
-        else:
-            return "Wrong password"
+        if not check_password_hash(user.password, password):
+            flash("Wrong password", "error")
+            return redirect("/login")
+
+        session["user_id"] = user.id
+        return redirect("/")
 
     return render_template("login.html")
 
@@ -191,157 +178,43 @@ def logout():
     return redirect("/login")
 
 # =========================
-# FORGOT PASSWORD
-# =========================
-@app.route("/forgot-password", methods=["GET", "POST"])
-def forgot_password():
-    if request.method == "POST":
-        email = request.form.get("email")
-
-        con = get_db()
-        cur = con.cursor()
-        cur.execute("SELECT id FROM users WHERE email=?", (email,))
-        user = cur.fetchone()
-
-        if not user:
-            return "Email bulunamadı"
-
-        token = str(uuid.uuid4())
-
-        cur.execute("UPDATE users SET reset_token=? WHERE id=?", (token, user[0]))
-        con.commit()
-
-        reset_link = f"{BASE_URL}/reset-password/{token}"
-
-        send_email(
-            email,
-            "Şifre sıfırlama",
-            f"""
-            <h3>Şifre sıfırlama</h3>
-            <p>Yeni şifre belirlemek için:</p>
-            <a href="{reset_link}">{reset_link}</a>
-            """
-        )
-
-        return "Mail gönderildi"
-
-    return render_template("forgot_password.html")
-
-
-@app.route("/reset-password/<token>", methods=["GET", "POST"])
-def reset_password(token):
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("SELECT id FROM users WHERE reset_token=?", (token,))
-    user = cur.fetchone()
-
-    if not user:
-        return "Geçersiz token"
-
-    if request.method == "POST":
-        new_password = request.form.get("password")
-        hashed = generate_password_hash(new_password)
-
-        cur.execute("""
-            UPDATE users
-            SET password=?, reset_token=NULL
-            WHERE id=?
-        """, (hashed, user[0]))
-        con.commit()
-
-        return "Şifre güncellendi. Artık giriş yapabilirsin."
-
-    return render_template("reset_password.html")
-
-
-# =========================
 # DASHBOARD
 # =========================
+
 @app.route("/")
 def dashboard():
     if "user_id" not in session:
         return redirect("/login")
 
-    con = get_db()
-    cur = con.cursor()
-    cur.execute("SELECT id, name, price, next FROM subscriptions WHERE user_id=?", (session["user_id"],))
-    rows = cur.fetchall()
+    subs = Subscription.query.filter_by(user_id=session["user_id"]).all()
 
-    subs = [{"id": r[0], "name": r[1], "price": r[2], "next": r[3]} for r in rows]
+    subs_data = [{"id": s.id, "name": s.name, "price": s.price, "next": s.next} for s in subs]
 
-    return render_template("dashboard.html",
-        subscriptions=subs,
-        total=sum(s["price"] for s in subs),
-        count=len(subs),
-        most_expensive=max(subs, key=lambda s: s["price"])["name"] if subs else "-",
-        labels=[s["name"] for s in subs],
-        values=[s["price"] for s in subs],
+    return render_template(
+        "dashboard.html",
+        subscriptions=subs_data,
+        total=sum(s["price"] for s in subs_data),
+        count=len(subs_data),
+        most_expensive=max(subs_data, key=lambda s: s["price"])["name"] if subs_data else "-",
+        labels=[s["name"] for s in subs_data],
+        values=[s["price"] for s in subs_data],
         title="Dashboard"
     )
 
 # =========================
-# DEV RESET
+# RESET DB DEV ONLY
 # =========================
+
 @app.route("/__reset_db")
 def reset_db():
-    con = get_db()
-    cur = con.cursor()
-    cur.execute("DELETE FROM users;")
-    cur.execute("DELETE FROM subscriptions;")
-    con.commit()
-    return "Database reset OK"
+    db.session.query(User).delete()
+    db.session.query(Subscription).delete()
+    db.session.commit()
+    return "DB reset OK"
 
 # =========================
 # SCHEDULER SAFE
 # =========================
-
-@app.route("/settings", methods=["GET", "POST"])
-def settings():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    con = get_db()
-    cur = con.cursor()
-
-    # Kullanıcının emailini al
-    cur.execute("SELECT email FROM users WHERE id=?", (session["user_id"],))
-    email = cur.fetchone()[0]
-
-    # Şifre değiştirme işlemi
-    if request.method == "POST":
-        current = request.form.get("current_password")
-        new = request.form.get("new_password")
-
-        cur.execute("SELECT password FROM users WHERE id=?", (session["user_id"],))
-        hashed = cur.fetchone()[0]
-
-        if not check_password_hash(hashed, current):
-            return "Mevcut şifre yanlış"
-
-        new_hashed = generate_password_hash(new)
-        cur.execute("UPDATE users SET password=? WHERE id=?", (new_hashed, session["user_id"]))
-        con.commit()
-
-        return "Şifre başarıyla güncellendi"
-
-    return render_template("settings.html", email=email)
-
-
-@app.route("/delete-account", methods=["POST"])
-def delete_account():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    con = get_db()
-    cur = con.cursor()
-
-    cur.execute("DELETE FROM subscriptions WHERE user_id=?", (session["user_id"],))
-    cur.execute("DELETE FROM users WHERE id=?", (session["user_id"],))
-    con.commit()
-
-    session.clear()
-    return "Hesabın silindi"
 
 def start_scheduler():
     scheduler = BackgroundScheduler(daemon=True)
@@ -351,6 +224,7 @@ start_scheduler()
 
 if __name__ == "__main__":
     app.run(debug=True)
+
 
 
 
